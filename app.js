@@ -426,7 +426,6 @@ function renderProblem() {
   actionBtns.className = 'action-buttons';
   actionBtns.innerHTML = `
     <button class="btn btn-primary" id="downloadExcelBtn">📥 导出 Excel</button>
-    <button class="btn btn-success" id="submitAllBtn">🚀 提交进度</button>
     <button class="btn" id="clearBtn">🧹 清空当前</button>
   `;
   groupEl.appendChild(actionBtns);
