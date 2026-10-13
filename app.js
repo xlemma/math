@@ -20,7 +20,7 @@ const wrongProblemsBtn = document.getElementById('wrongProblemsBtn');
 const statusMsg = document.getElementById('statusMsg');
 
 // =============================================================
-// 1. 根据 Level 动态加载题目
+// 1. 根据 Level 加载题目：优先取未练/少练的题目，并随机洗牌
 // =============================================================
 async function loadProblemsByLevel() {
   if (!levelSelect) return;
@@ -34,26 +34,69 @@ async function loadProblemsByLevel() {
   currentProblemIndex = 0;
 
   try {
-    updateStatusMessage('正在加载题目...');
-    console.log('正在请求 Level:', level);
+    updateStatusMessage('正在随机抽取题目...');
     
-    // 直接查询测试
-    const { data, error } = await supabaseClient
-      .from('math_problems')
-      .select('*')
-      .eq('level', level); // 尝试直接匹配（兼容文本或数字）
+    let allRows = [];
+    let page = 0;
+    let pageSize = 1000;
+    let hasMore = true;
 
-    console.log('Supabase 返回结果:', { data, error });
+    while (hasMore) {
+      const { data, error } = await supabaseClient
+        .from('math_problems')
+        .select('*')
+        .eq('level', Number(level))
+        .order('test_time', { ascending: true }) // 🌟 核心：依然优先把测试次数少（0次/没练过）的排在前面
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-    if (error) throw error;
+      if (error) throw error;
+      if (data && data.length > 0) {
+        allRows = allRows.concat(data);
+        if (data.length < pageSize) hasMore = false;
+        else page++;
+      } else {
+        hasMore = false;
+      }
+    }
 
-    if (!data || data.length === 0) {
-      problemsContainer.innerHTML = `<div class="empty-state">数据库中未找到 Level ${level} 的题目</div>`;
+    if (allRows.length === 0) {
+      problemsContainer.innerHTML = `<div class="empty-state">该级别暂无题目</div>`;
       updateStatusMessage('');
       return;
     }
 
-    displayProblems = data.map((row, idx) => ({
+    // 🌟 核心优化：为了兼顾“优先练少练的”和“随机出题”，
+    // 我们可以将“测试次数最少”的一批题目提取出来，或者直接对整个列表进行带权重的随机洗牌。
+    // 这里采用更聪明的做法：将相同 test_time 的题目分组，或者直接对全量列表做温和的随机打乱（保留大体少练在前，顺序随机）
+    
+    // 简单的 Fisher-Yates 随机洗牌算法
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    // 如果你想让完全没练过（test_time = 0）的题目随机打乱，练过一次的排后面也随机打乱：
+    // 我们按 test_time 分组，组内随机洗牌，然后再合并
+    const groupedByTestTime = {};
+    allRows.forEach(row => {
+      const t = row.test_time || 0;
+      if (!groupedByTestTime[t]) groupedByTestTime[t] = [];
+      groupedByTestTime[t].push(row);
+    });
+
+    let sortedAndRandomizedRows = [];
+    const sortedTestTimes = Object.keys(groupedByTestTime).map(Number).sort((a, b) => a - b);
+    
+    sortedTestTimes.forEach(t => {
+      // 对相同测试次数的题目进行随机洗牌
+      const shuffledGroup = shuffle(groupedByTestTime[t]);
+      sortedAndRandomizedRows = sortedAndRandomizedRows.concat(shuffledGroup);
+    });
+
+    displayProblems = sortedAndRandomizedRows.map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -70,8 +113,8 @@ async function loadProblemsByLevel() {
     renderProblem();
     updateStatusMessage('');
   } catch (err) {
-    console.error('加载题目失败详情:', err);
-    updateStatusMessage('❌ 加载题目失败，请查看控制台 (F12)');
+    console.error('加载题目失败:', err);
+    updateStatusMessage('❌ 加载题目失败');
   }
 }
 
