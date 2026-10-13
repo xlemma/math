@@ -186,7 +186,6 @@ h1 {
   border-radius: 10px;
 }
 
-/* 两个 Checkbox 选择区样式 */
 .checks-container {
   display: flex;
   gap: 24px;
@@ -259,12 +258,6 @@ h1 {
   color: white;
 }
 
-.btn-success {
-  background: #2e7d5e;
-  border-color: #2e7d5e;
-  color: white;
-}
-
 .status-msg {
   text-align: center;
   font-size: 0.85rem;
@@ -288,7 +281,6 @@ h1 {
   font-size: 0.95rem;
 }
 
-/* 模态框弹窗样式 */
 .modal-overlay {
   position: fixed;
   top: 0;
