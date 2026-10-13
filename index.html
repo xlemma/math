@@ -32,12 +32,13 @@
         </select>
       </div>
 
-      <!-- 自定义计时器控制栏 -->
+      <!-- 自定义计时器控制栏（含 开始、暂停/继续、停止） -->
       <div class="timer-control-bar">
-        <span style="font-size: 0.85rem; font-weight: 600; color: #4a5b6f;">⏱️ 自定义倒计时:</span>
+        <span style="font-size: 0.85rem; font-weight: 600; color: #4a5b6f;">⏱️ 倒计时:</span>
         <input type="number" id="customMinutesInput" class="form-input-number" value="3" min="1" max="120">
         <span style="font-size: 0.85rem; color: #4a5b6f;">分钟</span>
-        <button class="btn btn-primary" id="startTimerBtn" style="flex: none; padding: 8px 16px; font-size: 0.85rem;">开始计时</button>
+        <button class="btn btn-primary" id="startTimerBtn" style="flex: none; padding: 8px 12px; font-size: 0.85rem;">开始</button>
+        <button class="btn" id="pauseTimerBtn" style="flex: none; padding: 8px 12px; font-size: 0.85rem; background: #fef3c7; color: #b45309; border-color: #fde68a;" disabled>暂停</button>
         <button class="btn" id="stopTimerBtn" style="flex: none; padding: 8px 12px; font-size: 0.85rem; background: #fee2e2; color: #b91c1c; border-color: #fca5a5;">停止</button>
       </div>
     </div>
