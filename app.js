@@ -1,5 +1,5 @@
 // =============================================================
-// 数学口算闪算练习完整逻辑 (Timer + 优先少练 + 随机抽题 + 双 Checkbox)
+// 数学口算闪算练习逻辑 (点击下一题时自动静默同步到数据库)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -155,7 +155,6 @@ async function loadProblemsByLevel() {
       return;
     }
 
-    // 按测试次数分组并组内随机洗牌 (Random Pick)
     const grouped = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
@@ -252,7 +251,7 @@ async function showWrongProblemsList() {
 }
 
 // =============================================================
-// 3. 单题分页渲染（纯算式 + 两个 Checkbox）
+// 3. 单题分页渲染（纯算式 + 双 Checkbox）
 // =============================================================
 function renderProblem() {
   if (!problemsContainer) return;
@@ -338,7 +337,7 @@ function renderProblem() {
   card.appendChild(checksContainer);
   groupEl.appendChild(card);
 
-  // 翻页导肮栏
+  // 翻页导航栏（点击“下一题”时自动在后台静默同步当前题数据）
   const navContainer = document.createElement('div');
   navContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 10px; width: 100%;';
 
@@ -347,8 +346,9 @@ function renderProblem() {
   prevBtn.textContent = '⬅️ 上一题';
   prevBtn.disabled = currentProblemIndex === 0;
   prevBtn.style.opacity = currentProblemIndex === 0 ? '0.5' : '1';
-  prevBtn.addEventListener('click', () => {
+  prevBtn.addEventListener('click', async () => {
     if (currentProblemIndex > 0) {
+      await submitSingleProblemToSupabase(item.id, state);
       currentProblemIndex--;
       renderProblem();
     }
@@ -361,7 +361,7 @@ function renderProblem() {
   nextBtn.style.opacity = currentProblemIndex === displayProblems.length - 1 ? '0.5' : '1';
   nextBtn.addEventListener('click', async () => {
     if (currentProblemIndex < displayProblems.length - 1) {
-      await submitCurrentToSupabase();
+      await submitSingleProblemToSupabase(item.id, state);
       currentProblemIndex++;
       renderProblem();
     }
@@ -373,7 +373,7 @@ function renderProblem() {
   navContainer.appendChild(nextBtn);
   groupEl.appendChild(navContainer);
 
-  // 底部操作按钮
+  // 底部操作按钮（保留导出 Excel 和清空勾选）
   const actionBtns = document.createElement('div');
   actionBtns.className = 'action-buttons';
   actionBtns.innerHTML = `
@@ -383,11 +383,6 @@ function renderProblem() {
   groupEl.appendChild(actionBtns);
 
   actionBtns.querySelector('#downloadExcelBtn').addEventListener('click', downloadMathResults);
-  actionBtns.querySelector('#submitAllBtn').addEventListener('click', async () => {
-    await submitCurrentToSupabase();
-    updateStatusMessage('✅ 闪算练习进度已成功提交！');
-    setTimeout(() => updateStatusMessage(''), 2500);
-  });
   actionBtns.querySelector('#clearBtn').addEventListener('click', () => {
     state.isCorrect = null;
     state.isUnder2s = false;
@@ -401,22 +396,14 @@ function renderProblem() {
 }
 
 // =============================================================
-// 4. 数据库原子同步函数 (支持同步 test_time, correct_time, under_2s_count)
+// 4. 单题静默同步函数（每次切换题目时自动调用）
 // =============================================================
-async function submitCurrentToSupabase() {
-  const testedIds = [];
-  const correctIds = [];
-  const under2sIds = [];
+async function submitSingleProblemToSupabase(id, state) {
+  if (state.isCorrect === null) return; // 未勾选对错则不提交
 
-  stateMap.forEach((val, id) => {
-    if (val.isCorrect !== null) {
-      testedIds.push(id);
-      if (val.isCorrect === true) correctIds.push(id);
-      if (val.isUnder2s === true) under2sIds.push(id);
-    }
-  });
-
-  if (testedIds.length === 0) return;
+  const testedIds = [id];
+  const correctIds = state.isCorrect === true ? [id] : [];
+  const under2sIds = state.isUnder2s === true ? [id] : [];
 
   try {
     const { error } = await supabaseClient.rpc('update_math_stats', {
@@ -426,12 +413,12 @@ async function submitCurrentToSupabase() {
     });
     if (error) throw error;
   } catch (err) {
-    console.error('❌ 同步统计失败:', err);
+    console.error('❌ 静默同步统计失败:', err);
   }
 }
 
 // =============================================================
-// 5. 导出 Excel 统计报表 (包含 2秒内完成次数与闪算达标率)
+// 5. 导出 Excel 统计报表
 // =============================================================
 async function downloadMathResults() {
   try {
