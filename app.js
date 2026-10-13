@@ -1,5 +1,5 @@
 // =============================================================
-// 数学计算练习逻辑 (计时器 Timer + 随机出题 + 错题本 + 权限修复)
+// 数学计算练习逻辑 (自定义计时器 Timer + 优先少练 + 随机抽题)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -16,7 +16,6 @@ const stateMap = new Map(); // key -> { userAnswer, status: 0/1/2 }
 // 计时器相关变量
 let timerInterval = null;
 let timeLeft = 0;
-let isTimerRunning = false;
 
 // DOM 元素
 const levelSelect = document.getElementById('levelSelect');
@@ -24,29 +23,23 @@ const problemsContainer = document.getElementById('problemsContainer');
 const wrongProblemsBtn = document.getElementById('wrongProblemsBtn');
 const statusMsg = document.getElementById('statusMsg');
 
-const timerDurationSelect = document.getElementById('timerDurationSelect');
+const customMinutesInput = document.getElementById('customMinutesInput');
 const startTimerBtn = document.getElementById('startTimerBtn');
+const stopTimerBtn = document.getElementById('stopTimerBtn');
 const timerBadge = document.getElementById('timerBadge');
 const timeUpModal = document.getElementById('timeUpModal');
 const closeModalBtn = document.getElementById('closeModalBtn');
 
 // =============================================================
-// 计时器核心逻辑
+// 计时器控制逻辑
 // =============================================================
 function startTimer() {
-  if (!timerDurationSelect) return;
-  const duration = Number(timerDurationSelect.value);
-
-  if (duration === 0) {
-    timerBadge.textContent = '⏱️ 未开启计时';
-    if (timerInterval) clearInterval(timerInterval);
-    isTimerRunning = false;
-    return;
-  }
-
+  if (!customMinutesInput) return;
+  const minutes = Number(customMinutesInput.value) || 3;
+  
   if (timerInterval) clearInterval(timerInterval);
-  timeLeft = duration;
-  isTimerRunning = true;
+  
+  timeLeft = minutes * 60; // 转换为秒
   updateTimerBadge();
 
   timerInterval = setInterval(() => {
@@ -55,18 +48,31 @@ function startTimer() {
 
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
-      isTimerRunning = false;
+      timerInterval = null;
       showTimeUpModal();
     }
   }, 1000);
+
+  updateStatusMessage(`⏱️ 计时开始：${minutes}分钟倒计时中...`);
+  setTimeout(() => updateStatusMessage(''), 2000);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  timeLeft = 0;
+  updateTimerBadge();
+  updateStatusMessage('⏱️ 计时已停止');
+  setTimeout(() => updateStatusMessage(''), 2000);
 }
 
 function updateTimerBadge() {
   if (!timerBadge) return;
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
-  const timeStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  timerBadge.textContent = `⏱️ 剩余时间: ${timeStr}`;
+  timerBadge.textContent = `⏱️ ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
 function showTimeUpModal() {
@@ -80,11 +86,11 @@ if (closeModalBtn) {
 }
 
 if (startTimerBtn) {
-  startTimerBtn.addEventListener('click', () => {
-    startTimer();
-    updateStatusMessage('⏱️ 计时已开始，加油！');
-    setTimeout(() => updateStatusMessage(''), 2000);
-  });
+  startTimerBtn.addEventListener('click', startTimer);
+}
+
+if (stopTimerBtn) {
+  stopTimerBtn.addEventListener('click', stopTimer);
 }
 
 // =============================================================
@@ -125,7 +131,7 @@ async function loadProblemsByLevel() {
         .from('math_problems')
         .select('*')
         .eq('level', Number(level))
-        .order('test_time', { ascending: true })
+        .order('test_time', { ascending: true }) // 优先加载没练过/少练的题目
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) throw error;
@@ -144,6 +150,7 @@ async function loadProblemsByLevel() {
       return;
     }
 
+    // 相同 test_time 的组内进行随机洗牌 (Random Pick)
     const groupedByTestTime = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
@@ -175,9 +182,6 @@ async function loadProblemsByLevel() {
 
     renderProblem();
     updateStatusMessage('');
-
-    // 切换级别时自动启动计时器
-    startTimer();
   } catch (err) {
     console.error('加载题目失败:', err);
     updateStatusMessage('❌ 加载题目失败');
