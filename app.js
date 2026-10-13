@@ -1,5 +1,5 @@
 // =============================================================
-// 数学计算练习逻辑 (优先测试次数少 + 分组随机洗牌 Random Pick)
+// 数学计算练习逻辑 (计时器 Timer + 随机出题 + 错题本 + 权限修复)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -13,18 +13,85 @@ let currentProblemIndex = 0;
 // 状态映射
 const stateMap = new Map(); // key -> { userAnswer, status: 0/1/2 }
 
+// 计时器相关变量
+let timerInterval = null;
+let timeLeft = 0;
+let isTimerRunning = false;
+
 // DOM 元素
 const levelSelect = document.getElementById('levelSelect');
 const problemsContainer = document.getElementById('problemsContainer');
 const wrongProblemsBtn = document.getElementById('wrongProblemsBtn');
 const statusMsg = document.getElementById('statusMsg');
 
+const timerDurationSelect = document.getElementById('timerDurationSelect');
+const startTimerBtn = document.getElementById('startTimerBtn');
+const timerBadge = document.getElementById('timerBadge');
+const timeUpModal = document.getElementById('timeUpModal');
+const closeModalBtn = document.getElementById('closeModalBtn');
+
+// =============================================================
+// 计时器核心逻辑
+// =============================================================
+function startTimer() {
+  if (!timerDurationSelect) return;
+  const duration = Number(timerDurationSelect.value);
+
+  if (duration === 0) {
+    timerBadge.textContent = '⏱️ 未开启计时';
+    if (timerInterval) clearInterval(timerInterval);
+    isTimerRunning = false;
+    return;
+  }
+
+  if (timerInterval) clearInterval(timerInterval);
+  timeLeft = duration;
+  isTimerRunning = true;
+  updateTimerBadge();
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimerBadge();
+
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      isTimerRunning = false;
+      showTimeUpModal();
+    }
+  }, 1000);
+}
+
+function updateTimerBadge() {
+  if (!timerBadge) return;
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const timeStr = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  timerBadge.textContent = `⏱️ 剩余时间: ${timeStr}`;
+}
+
+function showTimeUpModal() {
+  if (timeUpModal) timeUpModal.style.display = 'flex';
+}
+
+if (closeModalBtn) {
+  closeModalBtn.addEventListener('click', () => {
+    if (timeUpModal) timeUpModal.style.display = 'none';
+  });
+}
+
+if (startTimerBtn) {
+  startTimerBtn.addEventListener('click', () => {
+    startTimer();
+    updateStatusMessage('⏱️ 计时已开始，加油！');
+    setTimeout(() => updateStatusMessage(''), 2000);
+  });
+}
+
 // =============================================================
 // 核心工具：Fisher-Yates 随机洗牌算法 (Random Pick / Shuffle)
 // =============================================================
 function shuffleArray(array) {
   for (let i = array.length - 1; i > 0; i--) {
-    // 🌟 这句就是随机抓取的核心：利用 Math.random() 在剩余元素中随机挑选索引
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
   }
@@ -58,7 +125,7 @@ async function loadProblemsByLevel() {
         .from('math_problems')
         .select('*')
         .eq('level', Number(level))
-        .order('test_time', { ascending: true }) // 🌟 核心：先按测试次数从少到多（没练过的 0 次排最前）
+        .order('test_time', { ascending: true })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) throw error;
@@ -77,9 +144,6 @@ async function loadProblemsByLevel() {
       return;
     }
 
-    // 🌟 核心进阶策略：
-    // 把“测试次数相同”的题目归为一组（例如：所有没练过 0 次的为一组，练过 1 次的为一组）
-    // 然后对每一组内部进行完全的随机洗牌 (Random Pick)，最后再把它们按测试次数少到多拼接起来。
     const groupedByTestTime = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
@@ -91,7 +155,6 @@ async function loadProblemsByLevel() {
     const sortedTestTimes = Object.keys(groupedByTestTime).map(Number).sort((a, b) => a - b);
 
     sortedTestTimes.forEach(t => {
-      // 组内调用 shuffleArray 实现 Random Pick 随机打乱
       const shuffledGroup = shuffleArray([...groupedByTestTime[t]]);
       prioritizedAndRandomizedRows = prioritizedAndRandomizedRows.concat(shuffledGroup);
     });
@@ -112,6 +175,9 @@ async function loadProblemsByLevel() {
 
     renderProblem();
     updateStatusMessage('');
+
+    // 切换级别时自动启动计时器
+    startTimer();
   } catch (err) {
     console.error('加载题目失败:', err);
     updateStatusMessage('❌ 加载题目失败');
@@ -158,7 +224,6 @@ async function showWrongProblemsList() {
       return;
     }
 
-    // 错题本也顺便做个随机洗牌 (Random Pick) 增加趣味性
     const shuffledWrongs = shuffleArray([...allWrong]);
 
     displayProblems = shuffledWrongs.map((row, idx) => ({
