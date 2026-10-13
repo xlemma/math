@@ -1,5 +1,5 @@
 // =============================================================
-// 数学计算练习逻辑 (Level 动态加载 + 单题分页 + 错题本 + Excel 导出)
+// 数学计算练习逻辑 (优先测试次数少 + 分组随机洗牌 Random Pick)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -20,7 +20,19 @@ const wrongProblemsBtn = document.getElementById('wrongProblemsBtn');
 const statusMsg = document.getElementById('statusMsg');
 
 // =============================================================
-// 1. 根据 Level 加载题目：优先取未练/少练的题目，并随机洗牌
+// 核心工具：Fisher-Yates 随机洗牌算法 (Random Pick / Shuffle)
+// =============================================================
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    // 🌟 这句就是随机抓取的核心：利用 Math.random() 在剩余元素中随机挑选索引
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// =============================================================
+// 1. 根据 Level 动态加载：优先 test_time 少，内部随机 Random Pick
 // =============================================================
 async function loadProblemsByLevel() {
   if (!levelSelect) return;
@@ -34,7 +46,7 @@ async function loadProblemsByLevel() {
   currentProblemIndex = 0;
 
   try {
-    updateStatusMessage('正在随机抽取题目...');
+    updateStatusMessage('正在加载并随机抽取题目...');
     
     let allRows = [];
     let page = 0;
@@ -46,7 +58,7 @@ async function loadProblemsByLevel() {
         .from('math_problems')
         .select('*')
         .eq('level', Number(level))
-        .order('test_time', { ascending: true }) // 🌟 核心：依然优先把测试次数少（0次/没练过）的排在前面
+        .order('test_time', { ascending: true }) // 🌟 核心：先按测试次数从少到多（没练过的 0 次排最前）
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) throw error;
@@ -65,21 +77,9 @@ async function loadProblemsByLevel() {
       return;
     }
 
-    // 🌟 核心优化：为了兼顾“优先练少练的”和“随机出题”，
-    // 我们可以将“测试次数最少”的一批题目提取出来，或者直接对整个列表进行带权重的随机洗牌。
-    // 这里采用更聪明的做法：将相同 test_time 的题目分组，或者直接对全量列表做温和的随机打乱（保留大体少练在前，顺序随机）
-    
-    // 简单的 Fisher-Yates 随机洗牌算法
-    function shuffle(array) {
-      for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-      }
-      return array;
-    }
-
-    // 如果你想让完全没练过（test_time = 0）的题目随机打乱，练过一次的排后面也随机打乱：
-    // 我们按 test_time 分组，组内随机洗牌，然后再合并
+    // 🌟 核心进阶策略：
+    // 把“测试次数相同”的题目归为一组（例如：所有没练过 0 次的为一组，练过 1 次的为一组）
+    // 然后对每一组内部进行完全的随机洗牌 (Random Pick)，最后再把它们按测试次数少到多拼接起来。
     const groupedByTestTime = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
@@ -87,16 +87,16 @@ async function loadProblemsByLevel() {
       groupedByTestTime[t].push(row);
     });
 
-    let sortedAndRandomizedRows = [];
+    let prioritizedAndRandomizedRows = [];
     const sortedTestTimes = Object.keys(groupedByTestTime).map(Number).sort((a, b) => a - b);
-    
+
     sortedTestTimes.forEach(t => {
-      // 对相同测试次数的题目进行随机洗牌
-      const shuffledGroup = shuffle(groupedByTestTime[t]);
-      sortedAndRandomizedRows = sortedAndRandomizedRows.concat(shuffledGroup);
+      // 组内调用 shuffleArray 实现 Random Pick 随机打乱
+      const shuffledGroup = shuffleArray([...groupedByTestTime[t]]);
+      prioritizedAndRandomizedRows = prioritizedAndRandomizedRows.concat(shuffledGroup);
     });
 
-    displayProblems = sortedAndRandomizedRows.map((row, idx) => ({
+    displayProblems = prioritizedAndRandomizedRows.map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -123,7 +123,7 @@ async function loadProblemsByLevel() {
 // =============================================================
 async function showWrongProblemsList() {
   try {
-    updateStatusMessage('正在加载错题本...');
+    updateStatusMessage('正在加载数学错题本...');
     isWrongView = true;
     currentProblemIndex = 0;
 
@@ -158,7 +158,10 @@ async function showWrongProblemsList() {
       return;
     }
 
-    displayProblems = allWrong.map((row, idx) => ({
+    // 错题本也顺便做个随机洗牌 (Random Pick) 增加趣味性
+    const shuffledWrongs = shuffleArray([...allWrong]);
+
+    displayProblems = shuffledWrongs.map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -232,7 +235,6 @@ function renderProblem() {
 
   input.addEventListener('input', (e) => {
     state.userAnswer = e.target.value;
-    // 自动判定对错
     const val = Number(e.target.value);
     if (e.target.value !== '' && val === item.answer) {
       state.status = 1; // 正确
@@ -251,7 +253,6 @@ function renderProblem() {
     }
   });
 
-  // 点击对错图标可以手动循环切换状态
   const checkBox = document.createElement('div');
   checkBox.className = 'check-box';
   if (state.status === 1) checkBox.textContent = '✓';
@@ -272,7 +273,7 @@ function renderProblem() {
   card.appendChild(ansSection);
   groupEl.appendChild(card);
 
-  // 翻页导航栏（点击下一个自动同步到数据库）
+  // 翻页导航栏（点击下一题自动同步）
   const navContainer = document.createElement('div');
   navContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 10px; width: 100%;';
 
@@ -307,7 +308,7 @@ function renderProblem() {
   navContainer.appendChild(nextBtn);
   groupEl.appendChild(navContainer);
 
-  // 附加操作按钮（导出 Excel、提交进度、清空判定）
+  // 附加操作按钮（导出 Excel、提交进度、清空当前）
   const actionBtns = document.createElement('div');
   actionBtns.className = 'action-buttons';
   actionBtns.innerHTML = `
@@ -317,7 +318,6 @@ function renderProblem() {
   `;
   groupEl.appendChild(actionBtns);
 
-  // 绑定按钮事件
   actionBtns.querySelector('#downloadExcelBtn').addEventListener('click', downloadMathResults);
   actionBtns.querySelector('#submitAllBtn').addEventListener('click', async () => {
     await submitCurrentToSupabase();
@@ -363,7 +363,7 @@ async function submitCurrentToSupabase() {
 }
 
 // =============================================================
-// 5. 导出数学练习 Excel 报表
+// 5. 导出 Excel 报表
 // =============================================================
 async function downloadMathResults() {
   try {
