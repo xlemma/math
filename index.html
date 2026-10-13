@@ -3,27 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <title>数学计算练习 · 专项训练</title>
+  <title>数学计算练习 · 计时特训版</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
     <h1>🔢 数学计算练习</h1>
     <div class="subhead">
-      按 Level 动态加载 · 单题分页 · 错题本重练 <span class="auto-badge">⚡ 实时同步</span>
+      按 Level 动态加载 · 单题分页 · 计时挑战 <span class="auto-badge" id="timerBadge">⏱️ 计时器就绪</span>
     </div>
 
-    <!-- 错词/错题本入口 -->
+    <!-- 错题本与计时器控制面板 -->
     <div class="top-action-bar">
       <button class="btn btn-warning btn-block" id="wrongProblemsBtn">⚠️ 查看数学错题本</button>
     </div>
 
-    <!-- 级别选择面板 -->
+    <!-- 级别与计时设置面板 -->
     <div class="panel">
-      <div class="panel-title">
+      <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
         <span>📊 选择计算级别 (Level)</span>
+        <div class="timer-config">
+          <label style="font-size: 0.78rem; color: #4a5b6f; font-weight: 600;">计时:</label>
+          <select id="timerDurationSelect" class="form-select" style="display: inline-block; width: auto; padding: 4px 8px; font-size: 0.82rem;">
+            <option value="0">不计时</option>
+            <option value="60">1分钟</option>
+            <option value="180">3分钟</option>
+            <option value="300" selected>5分钟</option>
+            <option value="600">10分钟</option>
+          </select>
+          <button class="btn" id="startTimerBtn" style="padding: 4px 10px; font-size: 0.8rem; display: inline-flex;">开始</button>
+        </div>
       </div>
-      <div class="select-item" style="margin-bottom: 10px;">
+      <div class="select-item" style="margin-top: 10px;">
         <select id="levelSelect" class="form-select">
           <option value="">请选择训练级别</option>
           <option value="1">Level 1: 十以内加减法</option>
@@ -41,7 +52,17 @@
     <div class="footer-note">输入计算结果 · 点1次=对(✓) · 点2次=错(✗) · 点击“下一个”自动提交</div>
   </div>
 
-  <!-- 引入 SheetJS 用于导出 Excel 和 Supabase SDK -->
+  <!-- 时间到弹出的提示模态框 (Modal) -->
+  <div id="timeUpModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-icon">⏰</div>
+      <h2>时间到啦！</h2>
+      <p>本次练习时间已结束，真棒！去核对一下刚才的战绩吧。</p>
+      <button class="btn btn-primary btn-block" id="closeModalBtn" style="margin-top: 16px;">我知道了</button>
+    </div>
+  </div>
+
+  <!-- 引入 SheetJS 和 Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
