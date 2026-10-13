@@ -1,5 +1,5 @@
 // =============================================================
-// 数学计算练习逻辑 (支持 Timer 暂停/继续 + 优先少练 + 随机抽题)
+// 数学口算闪算练习完整逻辑 (Timer + 优先少练 + 随机抽题 + 双 Checkbox)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -10,10 +10,10 @@ let displayProblems = [];
 let isWrongView = false;
 let currentProblemIndex = 0;
 
-// 状态映射
-const stateMap = new Map(); // key -> { userAnswer, status: 0/1/2 }
+// 状态映射: key -> { isCorrect: null/true/false, isUnder2s: false }
+const stateMap = new Map();
 
-// 计时器相关变量
+// 计时器变量
 let timerInterval = null;
 let timeLeft = 0;
 let isPaused = false;
@@ -33,88 +33,58 @@ const timeUpModal = document.getElementById('timeUpModal');
 const closeModalBtn = document.getElementById('closeModalBtn');
 
 // =============================================================
-// 计时器控制逻辑（含开始、暂停/继续、停止）
+// 计时器控制
 // =============================================================
 function startTimer() {
   if (!customMinutesInput) return;
-
-  // 如果是从暂停状态恢复
   if (isPaused && timeLeft > 0) {
     isPaused = false;
     pauseTimerBtn.textContent = '暂停';
-    pauseTimerBtn.style.background = '#fef3c7';
-    pauseTimerBtn.style.color = '#b45309';
-
     timerInterval = setInterval(ticker, 1000);
-    updateStatusMessage('⏱️ 计时已继续...');
-    setTimeout(() => updateStatusMessage(''), 1500);
     return;
   }
-
-  // 全新开始计时
   const minutes = Number(customMinutesInput.value) || 3;
   if (timerInterval) clearInterval(timerInterval);
   
-  timeLeft = minutes * 60; // 转换为秒
+  timeLeft = minutes * 60;
   isPaused = false;
   pauseTimerBtn.disabled = false;
   pauseTimerBtn.textContent = '暂停';
-  pauseTimerBtn.style.background = '#fef3c7';
-  pauseTimerBtn.style.color = '#b45309';
-
   updateTimerBadge();
   timerInterval = setInterval(ticker, 1000);
-
-  updateStatusMessage(`⏱️ 计时开始：${minutes}分钟倒计时中...`);
-  setTimeout(() => updateStatusMessage(''), 2000);
 }
 
 function ticker() {
   timeLeft--;
   updateTimerBadge();
-
   if (timeLeft <= 0) {
     clearInterval(timerInterval);
     timerInterval = null;
     pauseTimerBtn.disabled = true;
-    showTimeUpModal();
+    if (timeUpModal) timeUpModal.style.display = 'flex';
   }
 }
 
 function pauseTimer() {
   if (!timerInterval && !isPaused) return;
-
   if (!isPaused) {
-    // 暂停
     clearInterval(timerInterval);
     timerInterval = null;
     isPaused = true;
     pauseTimerBtn.textContent = '继续';
-    pauseTimerBtn.style.background = '#d1fae5';
-    pauseTimerBtn.style.color = '#065f46';
-    updateStatusMessage('⏱️ 计时已暂停');
-    setTimeout(() => updateStatusMessage(''), 1500);
   } else {
-    // 继续
     startTimer();
   }
 }
 
 function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
   timeLeft = 0;
   isPaused = false;
   pauseTimerBtn.disabled = true;
   pauseTimerBtn.textContent = '暂停';
-  pauseTimerBtn.style.background = '#fef3c7';
-  pauseTimerBtn.style.color = '#b45309';
-
   updateTimerBadge();
-  updateStatusMessage('⏱️ 计时已停止');
-  setTimeout(() => updateStatusMessage(''), 2000);
 }
 
 function updateTimerBadge() {
@@ -124,22 +94,13 @@ function updateTimerBadge() {
   timerBadge.textContent = `⏱️ ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
-function showTimeUpModal() {
-  if (timeUpModal) timeUpModal.style.display = 'flex';
-}
-
-if (closeModalBtn) {
-  closeModalBtn.addEventListener('click', () => {
-    if (timeUpModal) timeUpModal.style.display = 'none';
-  });
-}
-
+if (closeModalBtn) closeModalBtn.addEventListener('click', () => { if (timeUpModal) timeUpModal.style.display = 'none'; });
 if (startTimerBtn) startTimerBtn.addEventListener('click', startTimer);
 if (pauseTimerBtn) pauseTimerBtn.addEventListener('click', pauseTimer);
 if (stopTimerBtn) stopTimerBtn.addEventListener('click', stopTimer);
 
 // =============================================================
-// 核心工具：Fisher-Yates 随机洗牌算法 (Random Pick / Shuffle)
+// Fisher-Yates 随机洗牌算法 (Random Pick)
 // =============================================================
 function shuffleArray(array) {
   for (let i = array.length - 1; i > 0; i--) {
@@ -150,13 +111,13 @@ function shuffleArray(array) {
 }
 
 // =============================================================
-// 1. 根据 Level 动态加载：优先 test_time 少，内部随机 Random Pick
+// 1. 加载题目：优先 test_time 少，内部随机洗牌
 // =============================================================
 async function loadProblemsByLevel() {
   if (!levelSelect) return;
   const level = levelSelect.value;
   if (!level) {
-    problemsContainer.innerHTML = '<div class="empty-state">请先选择练习级别</div>';
+    problemsContainer.innerHTML = '<div class="empty-state">请先选择训练级别</div>';
     return;
   }
 
@@ -164,8 +125,7 @@ async function loadProblemsByLevel() {
   currentProblemIndex = 0;
 
   try {
-    updateStatusMessage('正在加载并随机抽取题目...');
-    
+    updateStatusMessage('正在随机抽取口算题...');
     let allRows = [];
     let page = 0;
     let pageSize = 1000;
@@ -195,22 +155,20 @@ async function loadProblemsByLevel() {
       return;
     }
 
-    const groupedByTestTime = {};
+    // 按测试次数分组并组内随机洗牌 (Random Pick)
+    const grouped = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
-      if (!groupedByTestTime[t]) groupedByTestTime[t] = [];
-      groupedByTestTime[t].push(row);
+      if (!grouped[t]) grouped[t] = [];
+      grouped[t].push(row);
     });
 
-    let prioritizedAndRandomizedRows = [];
-    const sortedTestTimes = Object.keys(groupedByTestTime).map(Number).sort((a, b) => a - b);
-
-    sortedTestTimes.forEach(t => {
-      const shuffledGroup = shuffleArray([...groupedByTestTime[t]]);
-      prioritizedAndRandomizedRows = prioritizedAndRandomizedRows.concat(shuffledGroup);
+    let sortedAndRandomized = [];
+    Object.keys(grouped).map(Number).sort((a, b) => a - b).forEach(t => {
+      sortedAndRandomized = sortedAndRandomized.concat(shuffleArray([...grouped[t]]));
     });
 
-    displayProblems = prioritizedAndRandomizedRows.map((row, idx) => ({
+    displayProblems = sortedAndRandomized.map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -221,11 +179,12 @@ async function loadProblemsByLevel() {
 
     stateMap.clear();
     displayProblems.forEach(p => {
-      stateMap.set(p.id, { userAnswer: '', status: 0 });
+      stateMap.set(p.id, { isCorrect: null, isUnder2s: false });
     });
 
     renderProblem();
     updateStatusMessage('');
+    startTimer();
   } catch (err) {
     console.error('加载题目失败:', err);
     updateStatusMessage('❌ 加载题目失败');
@@ -237,7 +196,7 @@ async function loadProblemsByLevel() {
 // =============================================================
 async function showWrongProblemsList() {
   try {
-    updateStatusMessage('正在加载数学错题本...');
+    updateStatusMessage('正在加载错题本...');
     isWrongView = true;
     currentProblemIndex = 0;
 
@@ -266,15 +225,12 @@ async function showWrongProblemsList() {
     }
 
     updateStatusMessage('');
-
     if (allWrong.length === 0) {
       problemsContainer.innerHTML = '<div class="empty-state">🎉 太棒了！目前没有数学错题记录。</div>';
       return;
     }
 
-    const shuffledWrongs = shuffleArray([...allWrong]);
-
-    displayProblems = shuffledWrongs.map((row, idx) => ({
+    displayProblems = shuffleArray([...allWrong]).map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -285,7 +241,7 @@ async function showWrongProblemsList() {
 
     stateMap.clear();
     displayProblems.forEach(p => {
-      stateMap.set(p.id, { userAnswer: '', status: 0 });
+      stateMap.set(p.id, { isCorrect: null, isUnder2s: false });
     });
 
     renderProblem();
@@ -296,7 +252,7 @@ async function showWrongProblemsList() {
 }
 
 // =============================================================
-// 3. 单题分页渲染
+// 3. 单题分页渲染（纯算式 + 两个 Checkbox）
 // =============================================================
 function renderProblem() {
   if (!problemsContainer) return;
@@ -309,7 +265,7 @@ function renderProblem() {
   if (currentProblemIndex < 0) currentProblemIndex = 0;
 
   const item = displayProblems[currentProblemIndex];
-  const state = stateMap.get(item.id) || { userAnswer: '', status: 0 };
+  const state = stateMap.get(item.id) || { isCorrect: null, isUnder2s: false };
 
   problemsContainer.innerHTML = '';
   const groupEl = document.createElement('div');
@@ -318,7 +274,7 @@ function renderProblem() {
   header.className = 'group-header';
   const title = document.createElement('span');
   title.className = 'group-title';
-  title.textContent = isWrongView ? '⚠️ 数学错题本训练' : `${item.category}`;
+  title.textContent = isWrongView ? '⚠️ 错题闪算特训' : `${item.category}`;
   const progress = document.createElement('span');
   progress.className = 'group-progress';
   progress.textContent = `第 ${currentProblemIndex + 1} / ${displayProblems.length} 题`;
@@ -327,66 +283,62 @@ function renderProblem() {
   header.appendChild(progress);
   groupEl.appendChild(header);
 
-  // 题目卡片
+  // 题目展示卡片
   const card = document.createElement('div');
   card.className = 'problem-card';
-  if (state.status === 1) card.classList.add('correct');
-  if (state.status === 2) card.classList.add('incorrect');
+  if (state.isCorrect === true) card.classList.add('correct');
+  if (state.isCorrect === false) card.classList.add('incorrect');
 
   const exprDiv = document.createElement('div');
   exprDiv.className = 'problem-expression';
   exprDiv.textContent = `${item.expression} = ?`;
 
-  const ansSection = document.createElement('div');
-  ansSection.className = 'answer-section';
+  const hintDiv = document.createElement('div');
+  hintDiv.className = 'answer-hint';
+  hintDiv.textContent = `💡 正确答案: ${item.answer}`;
 
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.className = 'answer-input';
-  input.placeholder = '结果';
-  input.value = state.userAnswer;
+  // 两个 Checkbox 选项区
+  const checksContainer = document.createElement('div');
+  checksContainer.className = 'checks-container';
 
-  input.addEventListener('input', (e) => {
-    state.userAnswer = e.target.value;
-    const val = Number(e.target.value);
-    if (e.target.value !== '' && val === item.answer) {
-      state.status = 1; // 正确
-      card.classList.add('correct');
-      card.classList.remove('incorrect');
-      checkBox.textContent = '✓';
-    } else if (e.target.value !== '' && val !== item.answer) {
-      state.status = 2; // 错误
-      card.classList.add('incorrect');
-      card.classList.remove('correct');
-      checkBox.textContent = '✗';
-    } else {
-      state.status = 0;
-      card.classList.remove('correct', 'incorrect');
-      checkBox.textContent = '';
-    }
-  });
-
-  const checkBox = document.createElement('div');
-  checkBox.className = 'check-box';
-  if (state.status === 1) checkBox.textContent = '✓';
-  else if (state.status === 2) checkBox.textContent = '✗';
-  else checkBox.textContent = '';
-
-  checkBox.addEventListener('click', () => {
-    state.status = (state.status + 1) % 3;
+  // Checkbox 1: 对错判定
+  const labelCorrect = document.createElement('label');
+  labelCorrect.className = 'check-item';
+  const cbCorrect = document.createElement('input');
+  cbCorrect.type = 'checkbox';
+  cbCorrect.checked = (state.isCorrect === true);
+  
+  cbCorrect.addEventListener('change', (e) => {
+    state.isCorrect = e.target.checked ? true : false;
     card.classList.remove('correct', 'incorrect');
-    if (state.status === 1) { card.classList.add('correct'); checkBox.textContent = '✓'; }
-    else if (state.status === 2) { card.classList.add('incorrect'); checkBox.textContent = '✗'; }
-    else { checkBox.textContent = ''; }
+    if (state.isCorrect) card.classList.add('correct');
+    else card.classList.add('incorrect');
   });
+  labelCorrect.appendChild(cbCorrect);
+  labelCorrect.appendChild(document.createTextNode(' ✓ 回答正确'));
 
-  ansSection.appendChild(input);
-  ansSection.appendChild(checkBox);
+  // Checkbox 2: 是否在两秒内完成
+  const labelUnder2s = document.createElement('label');
+  labelUnder2s.className = 'check-item';
+  const cbUnder2s = document.createElement('input');
+  cbUnder2s.type = 'checkbox';
+  cbUnder2s.checked = state.isUnder2s;
+  
+  cbUnder2s.addEventListener('change', (e) => {
+    state.isUnder2s = e.target.checked;
+  });
+  labelUnder2s.appendChild(cbUnder2s);
+  labelUnder2s.appendChild(document.createTextNode(' ⚡ 2秒内完成'));
+
+  checksContainer.appendChild(labelCorrect);
+  checksContainer.appendChild(labelUnder2s);
+
   card.appendChild(exprDiv);
-  card.appendChild(ansSection);
+  card.appendChild(hintDiv);
+  card.appendChild(checksContainer);
   groupEl.appendChild(card);
 
-  // 翻页导航栏（点击下一题自动同步）
+  // 翻页导肮栏
   const navContainer = document.createElement('div');
   navContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 10px; width: 100%;';
 
@@ -421,26 +373,27 @@ function renderProblem() {
   navContainer.appendChild(nextBtn);
   groupEl.appendChild(navContainer);
 
-  // 附加操作按钮（导出 Excel、提交进度、清空当前）
+  // 底部操作按钮
   const actionBtns = document.createElement('div');
   actionBtns.className = 'action-buttons';
   actionBtns.innerHTML = `
     <button class="btn btn-primary" id="downloadExcelBtn">📥 导出 Excel</button>
-    <button class="btn" id="clearBtn">🧹 清空当前</button>
+    <button class="btn" id="clearBtn">🧹 清空勾选</button>
   `;
   groupEl.appendChild(actionBtns);
 
   actionBtns.querySelector('#downloadExcelBtn').addEventListener('click', downloadMathResults);
   actionBtns.querySelector('#submitAllBtn').addEventListener('click', async () => {
     await submitCurrentToSupabase();
-    updateStatusMessage('✅ 数学练习进度已成功提交！');
+    updateStatusMessage('✅ 闪算练习进度已成功提交！');
     setTimeout(() => updateStatusMessage(''), 2500);
   });
   actionBtns.querySelector('#clearBtn').addEventListener('click', () => {
-    state.userAnswer = '';
-    state.status = 0;
+    state.isCorrect = null;
+    state.isUnder2s = false;
+    card.classList.remove('correct', 'incorrect');
     renderProblem();
-    updateStatusMessage('已清空当前题');
+    updateStatusMessage('已清空当前题状态');
     setTimeout(() => updateStatusMessage(''), 1500);
   });
 
@@ -448,16 +401,18 @@ function renderProblem() {
 }
 
 // =============================================================
-// 4. 数据库原子同步函数
+// 4. 数据库原子同步函数 (支持同步 test_time, correct_time, under_2s_count)
 // =============================================================
 async function submitCurrentToSupabase() {
   const testedIds = [];
   const correctIds = [];
+  const under2sIds = [];
 
   stateMap.forEach((val, id) => {
-    if (val.status !== 0) {
+    if (val.isCorrect !== null) {
       testedIds.push(id);
-      if (val.status === 1) correctIds.push(id);
+      if (val.isCorrect === true) correctIds.push(id);
+      if (val.isUnder2s === true) under2sIds.push(id);
     }
   });
 
@@ -466,21 +421,21 @@ async function submitCurrentToSupabase() {
   try {
     const { error } = await supabaseClient.rpc('update_math_stats', {
       p_tested_ids: testedIds,
-      p_correct_ids: correctIds
+      p_correct_ids: correctIds,
+      p_under_2s_ids: under2sIds
     });
     if (error) throw error;
   } catch (err) {
-    console.error('❌ 同步数学统计失败:', err);
+    console.error('❌ 同步统计失败:', err);
   }
 }
 
 // =============================================================
-// 5. 导出 Excel 报表
+// 5. 导出 Excel 统计报表 (包含 2秒内完成次数与闪算达标率)
 // =============================================================
 async function downloadMathResults() {
   try {
-    updateStatusMessage('正在从数据库获取所有已练数学题数据...');
-    
+    updateStatusMessage('正在导出 Excel...');
     let allTested = [];
     let page = 0;
     let pageSize = 1000;
@@ -505,9 +460,8 @@ async function downloadMathResults() {
     }
 
     updateStatusMessage('');
-
     if (allTested.length === 0) {
-      updateStatusMessage('没有找到任何已练习的数学题记录');
+      updateStatusMessage('暂无练习记录可导出');
       setTimeout(() => updateStatusMessage(''), 2500);
       return;
     }
@@ -515,8 +469,9 @@ async function downloadMathResults() {
     const excelData = allTested.map((item, index) => {
       const testTime = item.test_time || 0;
       const correctTime = item.correct_time || 0;
-      const wrongTime = testTime - correctTime;
+      const under2sCount = item.under_2s_count || 0;
       const accuracy = testTime > 0 ? ((correctTime / testTime) * 100).toFixed(1) + '%' : '0%';
+      const under2sRate = testTime > 0 ? ((under2sCount / testTime) * 100).toFixed(1) + '%' : '0%';
 
       return {
         "序号": index + 1,
@@ -524,29 +479,28 @@ async function downloadMathResults() {
         "分类": item.category,
         "算式": item.expression,
         "正确答案": item.answer,
-        "练习次数": testTime,
+        "测试次数": testTime,
         "正确次数": correctTime,
-        "错误次数": wrongTime,
-        "正确率": accuracy
+        "正确率": accuracy,
+        "2秒内完成次数": under2sCount,
+        "闪算达标率": under2sRate
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "数学计算统计");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "口算闪算统计");
 
     worksheet['!cols'] = [
-      {wch: 6}, {wch: 10}, {wch: 22}, {wch: 15}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}, {wch: 10}
+      {wch: 6}, {wch: 10}, {wch: 22}, {wch: 15}, {wch: 10}, 
+      {wch: 10}, {wch: 10}, {wch: 10}, {wch: 14}, {wch: 12}
     ];
+    XLSX.writeFile(workbook, `数学口算闪算报告_${new Date().toISOString().slice(0, 10)}.xlsx`);
 
-    const fileName = `数学计算练习报告_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(workbook, fileName);
-
-    updateStatusMessage('📥 数学 Excel 表格下载成功！');
+    updateStatusMessage('📥 Excel 下载成功！');
     setTimeout(() => updateStatusMessage(''), 2500);
-
   } catch (err) {
-    console.error('导出 Excel 失败:', err);
+    console.error('导出失败:', err);
     updateStatusMessage('❌ 导出 Excel 失败');
   }
 }
@@ -561,7 +515,7 @@ function updateStatusMessage(msg) {
   if (statusMsg) statusMsg.textContent = msg || '';
 }
 
-// 初始化默认加载 Level 1
+// 默认初始化加载 Level 1
 if (levelSelect) {
   levelSelect.value = "1";
   loadProblemsByLevel();
