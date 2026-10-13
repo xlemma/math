@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>数学计算练习 · 专项训练</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <h1>🔢 数学计算练习</h1>
+    <div class="subhead">
+      按 Level 动态加载 · 单题分页 · 错题本重练 <span class="auto-badge">⚡ 实时同步</span>
+    </div>
+
+    <!-- 错词/错题本入口 -->
+    <div class="top-action-bar">
+      <button class="btn btn-warning btn-block" id="wrongProblemsBtn">⚠️ 查看数学错题本</button>
+    </div>
+
+    <!-- 级别选择面板 -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>📊 选择计算级别 (Level)</span>
+      </div>
+      <div class="select-item" style="margin-bottom: 10px;">
+        <select id="levelSelect" class="form-select">
+          <option value="">请选择训练级别</option>
+          <option value="1">Level 1: 十以内加减法</option>
+          <option value="2">Level 2: 二十以内加减法</option>
+          <option value="3">Level 3: 100 以内不进位加减法</option>
+          <option value="4">Level 4: 100 以内进位加减法</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 题目卡片挂载容器 -->
+    <div id="problemsContainer"></div>
+
+    <div class="status-msg" id="statusMsg"></div>
+    <div class="footer-note">输入计算结果 · 点1次=对(✓) · 点2次=错(✗) · 点击“下一个”自动提交</div>
+  </div>
+
+  <!-- 引入 SheetJS 用于导出 Excel 和 Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
