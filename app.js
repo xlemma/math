@@ -1,5 +1,5 @@
 // =============================================================
-// 数学计算练习逻辑 (自定义计时器 Timer + 优先少练 + 随机抽题)
+// 数学计算练习逻辑 (支持 Timer 暂停/继续 + 优先少练 + 随机抽题)
 // =============================================================
 
 const SUPABASE_URL = 'https://whqpuzxfheqwaniuqbbz.supabase.co';
@@ -16,6 +16,7 @@ const stateMap = new Map(); // key -> { userAnswer, status: 0/1/2 }
 // 计时器相关变量
 let timerInterval = null;
 let timeLeft = 0;
+let isPaused = false;
 
 // DOM 元素
 const levelSelect = document.getElementById('levelSelect');
@@ -25,36 +26,78 @@ const statusMsg = document.getElementById('statusMsg');
 
 const customMinutesInput = document.getElementById('customMinutesInput');
 const startTimerBtn = document.getElementById('startTimerBtn');
+const pauseTimerBtn = document.getElementById('pauseTimerBtn');
 const stopTimerBtn = document.getElementById('stopTimerBtn');
 const timerBadge = document.getElementById('timerBadge');
 const timeUpModal = document.getElementById('timeUpModal');
 const closeModalBtn = document.getElementById('closeModalBtn');
 
 // =============================================================
-// 计时器控制逻辑
+// 计时器控制逻辑（含开始、暂停/继续、停止）
 // =============================================================
 function startTimer() {
   if (!customMinutesInput) return;
+
+  // 如果是从暂停状态恢复
+  if (isPaused && timeLeft > 0) {
+    isPaused = false;
+    pauseTimerBtn.textContent = '暂停';
+    pauseTimerBtn.style.background = '#fef3c7';
+    pauseTimerBtn.style.color = '#b45309';
+
+    timerInterval = setInterval(ticker, 1000);
+    updateStatusMessage('⏱️ 计时已继续...');
+    setTimeout(() => updateStatusMessage(''), 1500);
+    return;
+  }
+
+  // 全新开始计时
   const minutes = Number(customMinutesInput.value) || 3;
-  
   if (timerInterval) clearInterval(timerInterval);
   
   timeLeft = minutes * 60; // 转换为秒
+  isPaused = false;
+  pauseTimerBtn.disabled = false;
+  pauseTimerBtn.textContent = '暂停';
+  pauseTimerBtn.style.background = '#fef3c7';
+  pauseTimerBtn.style.color = '#b45309';
+
   updateTimerBadge();
-
-  timerInterval = setInterval(() => {
-    timeLeft--;
-    updateTimerBadge();
-
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      showTimeUpModal();
-    }
-  }, 1000);
+  timerInterval = setInterval(ticker, 1000);
 
   updateStatusMessage(`⏱️ 计时开始：${minutes}分钟倒计时中...`);
   setTimeout(() => updateStatusMessage(''), 2000);
+}
+
+function ticker() {
+  timeLeft--;
+  updateTimerBadge();
+
+  if (timeLeft <= 0) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    pauseTimerBtn.disabled = true;
+    showTimeUpModal();
+  }
+}
+
+function pauseTimer() {
+  if (!timerInterval && !isPaused) return;
+
+  if (!isPaused) {
+    // 暂停
+    clearInterval(timerInterval);
+    timerInterval = null;
+    isPaused = true;
+    pauseTimerBtn.textContent = '继续';
+    pauseTimerBtn.style.background = '#d1fae5';
+    pauseTimerBtn.style.color = '#065f46';
+    updateStatusMessage('⏱️ 计时已暂停');
+    setTimeout(() => updateStatusMessage(''), 1500);
+  } else {
+    // 继续
+    startTimer();
+  }
 }
 
 function stopTimer() {
@@ -63,6 +106,12 @@ function stopTimer() {
     timerInterval = null;
   }
   timeLeft = 0;
+  isPaused = false;
+  pauseTimerBtn.disabled = true;
+  pauseTimerBtn.textContent = '暂停';
+  pauseTimerBtn.style.background = '#fef3c7';
+  pauseTimerBtn.style.color = '#b45309';
+
   updateTimerBadge();
   updateStatusMessage('⏱️ 计时已停止');
   setTimeout(() => updateStatusMessage(''), 2000);
@@ -85,13 +134,9 @@ if (closeModalBtn) {
   });
 }
 
-if (startTimerBtn) {
-  startTimerBtn.addEventListener('click', startTimer);
-}
-
-if (stopTimerBtn) {
-  stopTimerBtn.addEventListener('click', stopTimer);
-}
+if (startTimerBtn) startTimerBtn.addEventListener('click', startTimer);
+if (pauseTimerBtn) pauseTimerBtn.addEventListener('click', pauseTimer);
+if (stopTimerBtn) stopTimerBtn.addEventListener('click', stopTimer);
 
 // =============================================================
 // 核心工具：Fisher-Yates 随机洗牌算法 (Random Pick / Shuffle)
@@ -131,7 +176,7 @@ async function loadProblemsByLevel() {
         .from('math_problems')
         .select('*')
         .eq('level', Number(level))
-        .order('test_time', { ascending: true }) // 优先加载没练过/少练的题目
+        .order('test_time', { ascending: true })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) throw error;
@@ -150,7 +195,6 @@ async function loadProblemsByLevel() {
       return;
     }
 
-    // 相同 test_time 的组内进行随机洗牌 (Random Pick)
     const groupedByTestTime = {};
     allRows.forEach(row => {
       const t = row.test_time || 0;
