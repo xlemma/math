@@ -3,36 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-  <title>数学计算练习 · 计时特训版</title>
+  <title>数学口算闪算 · 极速特训版</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
-    <h1>🔢 数学计算练习</h1>
+    <h1>⚡ 数学口算闪算练习</h1>
     <div class="subhead">
-      按 Level 动态加载 · 单题分页 · 计时挑战 
+      全量题库随机出题 · 闪算模式 
       <span class="auto-badge" id="timerBadge">⏱️ 00:00</span>
     </div>
 
-    <!-- 错词/错题本入口 -->
+    <!-- 错题本入口 -->
     <div class="top-action-bar">
       <button class="btn btn-warning btn-block" id="wrongProblemsBtn">⚠️ 查看数学错题本</button>
     </div>
 
-    <!-- 级别与自定义计时设置面板 -->
+    <!-- 级别与计时设置面板 -->
     <div class="panel">
       <div class="panel-title"><span>📊 选择计算级别 (Level)</span></div>
       <div class="select-item" style="margin-bottom: 12px;">
         <select id="levelSelect" class="form-select">
           <option value="">请选择训练级别</option>
-          <option value="1">Level 1: 十以内加减法</option>
-          <option value="2">Level 2: 二十以内加减法</option>
-          <option value="3">Level 3: 100 以内不进位加减法</option>
-          <option value="4">Level 4: 100 以内进位加减法</option>
+          <option value="1">Level 1: 十以内加减法全量穷举</option>
+          <option value="2">Level 2: 二十以内加减法全量穷举</option>
+          <option value="3">Level 3: 100 以内不进位加减法全量穷举</option>
+          <option value="4">Level 4: 100 以内进位加减法全量穷举</option>
         </select>
       </div>
 
-      <!-- 自定义计时器控制栏（含 开始、暂停/继续、停止） -->
+      <!-- 计时器控制栏 -->
       <div class="timer-control-bar">
         <span style="font-size: 0.85rem; font-weight: 600; color: #4a5b6f;">⏱️ 倒计时:</span>
         <input type="number" id="customMinutesInput" class="form-input-number" value="3" min="1" max="120">
@@ -47,15 +47,15 @@
     <div id="problemsContainer"></div>
 
     <div class="status-msg" id="statusMsg"></div>
-    <div class="footer-note">输入计算结果 · 点1次=对(✓) · 点2次=错(✗) · 点击“下一个”自动提交</div>
+    <div class="footer-note">无需输入结果 · 直接观察算式口算 · 勾选对错与2秒内完成 · 点击“下一个”自动同步</div>
   </div>
 
-  <!-- 时间到弹出的提示模态框 (Modal) -->
+  <!-- 时间到弹出的提示模态框 -->
   <div id="timeUpModal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-icon">⏰</div>
       <h2>时间到啦！</h2>
-      <p>本次练习时间已结束，真棒！去核对一下刚才的战绩吧。</p>
+      <p>本次口算闪算时间已结束，真棒！去核对一下刚才的战绩吧。</p>
       <button class="btn btn-primary btn-block" id="closeModalBtn" style="margin-top: 16px;">我知道了</button>
     </div>
   </div>
