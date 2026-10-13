@@ -35,32 +35,25 @@ async function loadProblemsByLevel() {
 
   try {
     updateStatusMessage('正在加载题目...');
+    console.log('正在请求 Level:', level);
     
-    // 分页拉取该 Level 的所有题目
-    let allRows = [];
-    let page = 0;
-    let pageSize = 1000;
-    let hasMore = true;
+    // 直接查询测试
+    const { data, error } = await supabaseClient
+      .from('math_problems')
+      .select('*')
+      .eq('level', level); // 尝试直接匹配（兼容文本或数字）
 
-    while (hasMore) {
-      const { data, error } = await supabaseClient
-        .from('math_problems')
-        .select('*')
-        .eq('level', Number(level))
-        .order('id', { ascending: true })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    console.log('Supabase 返回结果:', { data, error });
 
-      if (error) throw error;
-      if (data && data.length > 0) {
-        allRows = allRows.concat(data);
-        if (data.length < pageSize) hasMore = false;
-        else page++;
-      } else {
-        hasMore = false;
-      }
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      problemsContainer.innerHTML = `<div class="empty-state">数据库中未找到 Level ${level} 的题目</div>`;
+      updateStatusMessage('');
+      return;
     }
 
-    displayProblems = allRows.map((row, idx) => ({
+    displayProblems = data.map((row, idx) => ({
       id: row.id,
       level: row.level,
       category: row.category,
@@ -71,14 +64,14 @@ async function loadProblemsByLevel() {
 
     stateMap.clear();
     displayProblems.forEach(p => {
-      stateMap.set(p.id, { userAnswer: '', status: 0 }); // 0: 未判定, 1: 正确, 2: 错误
+      stateMap.set(p.id, { userAnswer: '', status: 0 });
     });
 
     renderProblem();
     updateStatusMessage('');
   } catch (err) {
-    console.error('加载题目失败:', err);
-    updateStatusMessage('❌ 加载题目失败');
+    console.error('加载题目失败详情:', err);
+    updateStatusMessage('❌ 加载题目失败，请查看控制台 (F12)');
   }
 }
 
